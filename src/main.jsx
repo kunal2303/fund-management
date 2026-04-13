@@ -416,7 +416,7 @@ function App() {
             </div>
             <div className="profile-actions">
               <button className="secondary" type="button" disabled={isSyncing} onClick={switchProfile}>
-                Switch profile
+                Logout
               </button>
               <button className="danger" type="button" onClick={deleteActiveProfile}>
                 Delete profile
@@ -652,11 +652,9 @@ function FundForm({ draft, setDraft, onSubmit, onCancel }) {
       </label>
       <div className="form-actions">
         <button type="submit">{isEditing ? "Update fund" : "Save fund"}</button>
-        {isEditing && (
-          <button className="secondary" type="button" onClick={onCancel}>
-            Cancel edit
-          </button>
-        )}
+        <button className="secondary" type="button" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
     </motion.form>
   );
