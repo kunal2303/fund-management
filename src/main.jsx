@@ -215,19 +215,22 @@ function App() {
       await setDoc(doc(db, "profiles", updatedProfile.id), updatedProfile);
     } catch(e) {
       console.error("Failed to sync to cloud", e);
-      alert("Failed to sync to cloud. Changes are only local.");
+      alert("Failed to sync to cloud. Changes are only local. " + (e.message || String(e)));
     }
     setIsSyncing(false);
   }
 
   async function handleOpenPortfolioSubmit(event) {
     event.preventDefault();
+    const form = event.currentTarget;
+    const passcodeEl = form.elements.openPasscode;
+
     if (profileDraft.passcode.length !== 6) {
-      event.currentTarget.elements.openPasscode.setCustomValidity("Enter a 6 digit passcode.");
-      event.currentTarget.elements.openPasscode.reportValidity();
+      passcodeEl.setCustomValidity("Enter a 6 digit passcode.");
+      passcodeEl.reportValidity();
       return;
     }
-    event.currentTarget.elements.openPasscode.setCustomValidity("");
+    passcodeEl.setCustomValidity("");
 
     const name = normalizeName(profileDraft.name);
     const phone = normalizePhone(profileDraft.phone);
@@ -241,8 +244,8 @@ function App() {
       if (!snapshot.empty) {
         const existing = snapshot.docs[0].data();
         if (existing.passcode !== passcode) {
-          event.currentTarget.elements.openPasscode.setCustomValidity("Passcode does not match this profile.");
-          event.currentTarget.elements.openPasscode.reportValidity();
+          passcodeEl.setCustomValidity("Passcode does not match this profile.");
+          passcodeEl.reportValidity();
           setIsSyncing(false);
           return;
         }
@@ -269,13 +272,17 @@ function App() {
       setProfileDraft({ name: "", phone: "", passcode: "" });
     } catch(e) {
       console.error(e);
-      alert("Network error.");
+      alert("Network error: " + (e.message || String(e)));
     }
     setIsSyncing(false);
   }
 
   async function handleLoginSubmit(event) {
     event.preventDefault();
+    const form = event.currentTarget;
+    const phoneEl = form.elements.loginPhone;
+    const passcodeEl = form.elements.loginPasscode;
+
     const phone = normalizePhone(loginDraft.phone);
     const passcode = loginDraft.passcode;
 
@@ -285,28 +292,28 @@ function App() {
       const snapshot = await getDocs(q);
 
       if (snapshot.empty) {
-        event.currentTarget.elements.loginPhone.setCustomValidity("No portfolio found for this mobile number.");
-        event.currentTarget.elements.loginPhone.reportValidity();
+        phoneEl.setCustomValidity("No portfolio found for this mobile number.");
+        phoneEl.reportValidity();
         setIsSyncing(false);
         return;
       }
-      event.currentTarget.elements.loginPhone.setCustomValidity("");
+      phoneEl.setCustomValidity("");
 
       const existingProfile = snapshot.docs[0].data();
       if (existingProfile.passcode !== passcode) {
-        event.currentTarget.elements.loginPasscode.setCustomValidity("Passcode does not match this portfolio.");
-        event.currentTarget.elements.loginPasscode.reportValidity();
+        passcodeEl.setCustomValidity("Passcode does not match this portfolio.");
+        passcodeEl.reportValidity();
         setIsSyncing(false);
         return;
       }
-      event.currentTarget.elements.loginPasscode.setCustomValidity("");
+      passcodeEl.setCustomValidity("");
 
       setActiveProfile(existingProfile);
       localStorage.setItem("active-phone", phone);
       setLoginDraft({ phone: "", passcode: "" });
     } catch (e) {
       console.error(e);
-      alert("Network error.");
+      alert("Network error: " + (e.message || String(e)));
     }
     setIsSyncing(false);
   }
@@ -377,7 +384,7 @@ function App() {
       setSelectedFundId("");
     } catch(e) {
       console.error(e);
-      alert("Failed to delete profile.");
+      alert("Failed to delete profile: " + (e.message || String(e)));
     }
     setIsSyncing(false);
   }
