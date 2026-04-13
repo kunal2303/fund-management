@@ -96,7 +96,7 @@ function getFundStats(fund) {
   const months = getInstallments(fund).length;
   const monthlyAmount = Number(fund.monthlyAmount) || 0;
   const invested = months * monthlyAmount;
-  const hasCurrentValue = fund.currentValue !== "" && fund.currentValue !== null && fund.currentValue !== undefined && !Number.isNaN(Number(fund.currentValue));
+  const hasCurrentValue = fund.currentValue !== "" && fund.currentValue !== null && fund.currentValue !== undefined && Number(fund.currentValue) !== 0 && !Number.isNaN(Number(fund.currentValue));
   const hasReturnPercent = fund.returnPercent !== "" && fund.returnPercent !== null && fund.returnPercent !== undefined && !Number.isNaN(Number(fund.returnPercent));
   const savedCurrentValue = hasCurrentValue ? Number(fund.currentValue) : 0;
   const savedReturnPercent = hasReturnPercent ? Number(fund.returnPercent) : 0;
