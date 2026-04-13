@@ -224,6 +224,7 @@ function App() {
     event.preventDefault();
     const form = event.currentTarget;
     const passcodeEl = form.elements.openPasscode;
+    const phoneEl = form.elements.openPhone;
 
     if (profileDraft.passcode.length !== 6) {
       passcodeEl.setCustomValidity("Enter a 6 digit passcode.");
@@ -231,6 +232,7 @@ function App() {
       return;
     }
     passcodeEl.setCustomValidity("");
+    phoneEl.setCustomValidity("");
 
     const name = normalizeName(profileDraft.name);
     const phone = normalizePhone(profileDraft.phone);
@@ -242,14 +244,10 @@ function App() {
       const snapshot = await getDocs(q);
       
       if (!snapshot.empty) {
-        const existing = snapshot.docs[0].data();
-        if (existing.passcode !== passcode) {
-          passcodeEl.setCustomValidity("Passcode does not match this profile.");
-          passcodeEl.reportValidity();
-          setIsSyncing(false);
-          return;
-        }
-        setActiveProfile(existing);
+        phoneEl.setCustomValidity("Phone number already registered.");
+        phoneEl.reportValidity();
+        setIsSyncing(false);
+        return;
       } else {
         let migratedFunds = [];
         try {
