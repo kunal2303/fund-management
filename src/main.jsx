@@ -1,7 +1,10 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { StrictMode, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { registerSW } from "virtual:pwa-register";
 import "./styles.css";
+
+registerSW({ immediate: true });
 import { db } from "./firebase";
 import { collection, query, where, getDocs, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
 
