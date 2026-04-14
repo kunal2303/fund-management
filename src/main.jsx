@@ -582,6 +582,15 @@ function App() {
           </AnimatePresence>
         </div>
       </motion.section>
+
+      <motion.footer 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        transition={{ delay: 0.5, duration: 0.5 }}
+        style={{ textAlign: "center", paddingTop: "4rem", color: "var(--muted)", fontSize: "0.95rem" }}
+      >
+        Designed & Built by Kunal
+      </motion.footer>
     </motion.main>
   );
 }
