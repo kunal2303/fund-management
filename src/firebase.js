@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -12,4 +13,40 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+let firebaseSessionPromise;
+
+export function ensureFirebaseSession() {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
+  if (!firebaseSessionPromise) {
+    firebaseSessionPromise = new Promise((resolve, reject) => {
+      const unsubscribe = onAuthStateChanged(
+        auth,
+        (user) => {
+          if (user) {
+            unsubscribe();
+            resolve(user);
+          }
+        },
+        (error) => {
+          unsubscribe();
+          firebaseSessionPromise = null;
+          reject(error);
+        }
+      );
+
+      signInAnonymously(auth).catch((error) => {
+        unsubscribe();
+        firebaseSessionPromise = null;
+        reject(error);
+      });
+    });
+  }
+
+  return firebaseSessionPromise;
+}

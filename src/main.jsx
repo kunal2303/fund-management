@@ -5,10 +5,12 @@ import { registerSW } from "virtual:pwa-register";
 import "./styles.css";
 
 registerSW({ immediate: true });
-import { db } from "./firebase";
+import { db, ensureFirebaseSession } from "./firebase";
 import { collection, query, where, getDocs, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
 
 const STORAGE_KEY = "sip-investment-tracker:v2";
+const PASSCODE_HASH_ALGORITHM = "PBKDF2-SHA-256";
+const PASSCODE_HASH_ITERATIONS = 150000;
 const currency = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
@@ -48,6 +50,85 @@ function normalizeName(name) {
 
 function normalizePhone(phone) {
   return phone.replace(/\D/g, "");
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return window.btoa(binary);
+}
+
+function base64ToBytes(value) {
+  return Uint8Array.from(window.atob(value), (char) => char.charCodeAt(0));
+}
+
+function constantTimeEqual(left, right) {
+  const leftBytes = base64ToBytes(left);
+  const rightBytes = base64ToBytes(right);
+  let difference = leftBytes.length ^ rightBytes.length;
+  const length = Math.max(leftBytes.length, rightBytes.length);
+
+  for (let index = 0; index < length; index += 1) {
+    difference |= (leftBytes[index] || 0) ^ (rightBytes[index] || 0);
+  }
+
+  return difference === 0;
+}
+
+function createPasscodeSalt() {
+  const salt = new Uint8Array(16);
+  window.crypto.getRandomValues(salt);
+  return bytesToBase64(salt);
+}
+
+async function hashPasscode(passcode, salt, iterations = PASSCODE_HASH_ITERATIONS) {
+  const key = await window.crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(passcode),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const derivedBits = await window.crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: base64ToBytes(salt),
+      iterations
+    },
+    key,
+    256
+  );
+
+  return bytesToBase64(new Uint8Array(derivedBits));
+}
+
+async function createPasscodeCredentials(passcode) {
+  const passcodeSalt = createPasscodeSalt();
+  const passcodeHash = await hashPasscode(passcode, passcodeSalt);
+
+  return {
+    passcodeHash,
+    passcodeSalt,
+    passcodeHashAlgorithm: PASSCODE_HASH_ALGORITHM,
+    passcodeHashIterations: PASSCODE_HASH_ITERATIONS
+  };
+}
+
+function removePlainPasscode(profile) {
+  const { passcode, ...safeProfile } = profile;
+  return safeProfile;
+}
+
+async function verifyPasscode(profile, passcode) {
+  if (profile.passcodeHash && profile.passcodeSalt) {
+    const passcodeHash = await hashPasscode(passcode, profile.passcodeSalt, profile.passcodeHashIterations || PASSCODE_HASH_ITERATIONS);
+    return constantTimeEqual(profile.passcodeHash, passcodeHash);
+  }
+
+  return profile.passcode === passcode;
 }
 
 function parseLocalDate(value) {
@@ -137,10 +218,16 @@ function App() {
       const phone = localStorage.getItem("active-phone");
       if (phone) {
         try {
+          await ensureFirebaseSession();
           const q = query(collection(db, "profiles"), where("phone", "==", phone));
           const snapshot = await getDocs(q);
           if (!snapshot.empty) {
-            setActiveProfile(snapshot.docs[0].data());
+            const savedProfile = snapshot.docs[0].data();
+            if (savedProfile.passcodeHash) {
+              setActiveProfile(removePlainPasscode(savedProfile));
+            } else {
+              localStorage.removeItem("active-phone");
+            }
           } else {
             localStorage.removeItem("active-phone");
           }
@@ -215,6 +302,7 @@ function App() {
     setActiveProfile(updatedProfile);
     setIsSyncing(true);
     try {
+      await ensureFirebaseSession();
       await setDoc(doc(db, "profiles", updatedProfile.id), updatedProfile);
     } catch(e) {
       console.error("Failed to sync to cloud", e);
@@ -243,6 +331,7 @@ function App() {
 
     setIsSyncing(true);
     try {
+      await ensureFirebaseSession();
       const q = query(collection(db, "profiles"), where("phone", "==", phone));
       const snapshot = await getDocs(q);
       
@@ -265,7 +354,13 @@ function App() {
           }
         } catch(e) {}
 
-        const profile = { id: createId("profile"), name, phone, passcode, funds: migratedFunds };
+        const profile = {
+          id: createId("profile"),
+          name,
+          phone,
+          ...(await createPasscodeCredentials(passcode)),
+          funds: migratedFunds
+        };
         await setDoc(doc(db, "profiles", profile.id), profile);
         setActiveProfile(profile);
       }
@@ -289,6 +384,7 @@ function App() {
 
     setIsSyncing(true);
     try {
+      await ensureFirebaseSession();
       const q = query(collection(db, "profiles"), where("phone", "==", phone));
       const snapshot = await getDocs(q);
 
@@ -301,7 +397,7 @@ function App() {
       phoneEl.setCustomValidity("");
 
       const existingProfile = snapshot.docs[0].data();
-      if (existingProfile.passcode !== passcode) {
+      if (!(await verifyPasscode(existingProfile, passcode))) {
         passcodeEl.setCustomValidity("Passcode does not match this portfolio.");
         passcodeEl.reportValidity();
         setIsSyncing(false);
@@ -309,7 +405,18 @@ function App() {
       }
       passcodeEl.setCustomValidity("");
 
-      setActiveProfile(existingProfile);
+      let activeProfile = removePlainPasscode(existingProfile);
+      if (!existingProfile.passcodeHash) {
+        activeProfile = {
+          ...activeProfile,
+          ...(await createPasscodeCredentials(passcode))
+        };
+      }
+      if (existingProfile.passcode || !existingProfile.passcodeHash) {
+        await setDoc(doc(db, "profiles", activeProfile.id), activeProfile);
+      }
+
+      setActiveProfile(activeProfile);
       localStorage.setItem("active-phone", phone);
       setLoginDraft({ phone: "", passcode: "" });
     } catch (e) {
@@ -377,6 +484,7 @@ function App() {
 
     setIsSyncing(true);
     try {
+      await ensureFirebaseSession();
       await deleteDoc(doc(db, "profiles", activeProfile.id));
       localStorage.removeItem("active-phone");
       setActiveProfile(null);
